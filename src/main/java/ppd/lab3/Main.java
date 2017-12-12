@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -17,7 +18,7 @@ import java.util.stream.Stream;
  * @author Marius Adam
  */
 public class Main {
-    private static final int TEST_REPETITIONS = 10;
+    private static final int TEST_REPETITIONS = 100;
     private static final boolean LOG_ENABLED = false;
 
     private static SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss.SSS");
@@ -27,7 +28,6 @@ public class Main {
                 (Function<Void, SortedLinkedList<Integer>>) aVoid -> new CoarseGrainedSyncedSortedLinkedList<>(),
                 aVoid -> new FineGrainedSyncSortedLinkedList<>()
         ).collect(Collectors.toList());
-
         List<TestCase<Integer>> tests = Stream.of(
                 new TestCaseOneInt(),
                 new TestCaseTwoInt()
@@ -37,7 +37,7 @@ public class Main {
 
         tests.forEach(testCase -> instances.forEach(listFactory -> {
             SortedLinkedList<Integer> instance = listFactory.apply(null);
-            log("main", testCase.getClass().getSimpleName(), instance.getClass().getSimpleName());
+//            log("main", testCase.getClass().getSimpleName(), instance.getClass().getSimpleName());
 
             long sum = 0;
             for (int i = 0; i < TEST_REPETITIONS; ++i) {
@@ -52,7 +52,6 @@ public class Main {
             );
         }));
 
-        Thread.sleep(100);
         benchmarks.forEach((s, avg) -> log("main", s, avg.toString()));
     }
 

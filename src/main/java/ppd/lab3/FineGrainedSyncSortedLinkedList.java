@@ -3,13 +3,15 @@ package ppd.lab3;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author Marius Adam
  */
 public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements SortedLinkedList<E> {
-    private LockingNode<E> root;
+    private Node<E> root;
     private Comparator<E> comparator;
+    private Lock listLock = new ReentrantLock();
 
     public FineGrainedSyncSortedLinkedList() {
         this(Comparable::compareTo);
@@ -21,29 +23,42 @@ public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements
 
     @Override
     public void add(E elem) {
-        synchronized (this) {
-            if (root == null) {
-                root = new LockingNode<E>(elem);
-                return;
-            }
+        listLock.lock();
+
+        if (root == null) {
+            root = new Node<>(elem);
+            listLock.unlock();
+            return;
         }
-        root.getLock().lock();
-        Lock rootLock = root.getLock();
         if (this.comparator().compare(elem, root.value()) < 0) {
-            root = new LockingNode<>(null, elem, this.root);
-            rootLock.unlock();
+            Node<E> oldRoot = root;
+            root = new Node<>(elem);
+            root.setNext(oldRoot);
+            listLock.unlock();
         } else {
-            LockingNode<E> current = root;
-            while (current.next() != null && comparator().compare(elem, current.value()) > 0) {
-                unlock(current);
-                current = current.next();
-                lock(current);
+            Node<E> prev = root, current = root.next(), node = new Node<E>(elem);
+            prev.getLock().lock();
+            if (current != null) {
+                current.getLock().lock();
             }
-            lock(current.next());
-            LockingNode<E> next = current.next();
-            current.setNext(new LockingNode<>(current, elem, next));
-            unlock(current);
-            unlock(next);
+            listLock.unlock();
+            while (current != null) {
+                if (comparator().compare(current.value(), node.value()) >= 0) {
+                    prev.setNext(node);
+                    node.setNext(current);
+                    prev.getLock().unlock();
+                    current.getLock().unlock();
+                    return;
+                }
+                Node<E> oldPrev = prev;
+                prev = current;
+                current = current.next();
+                if (current != null) {
+                    current.getLock().lock();
+                }
+                oldPrev.getLock().unlock();
+            }
+            prev.getLock().unlock();
         }
     }
 
@@ -54,58 +69,44 @@ public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements
 
     @Override
     public boolean remove(E elem) {
-        synchronized (this) {
-            if (root == null) {
-                return false;
-            }
-        }
-
-        lock(root);
-        LockingNode<E> current = root;
-        while (current != null && !current.value().equals(elem)) {
-            unlock(current);
-            current = current.next();
-            lock(current);
-        }
-
-        if (current == null) {
+        listLock.lock();
+        if (root == null) {
+            listLock.unlock();
             return false;
-        } else {
-            lock(current.prev());
-            lock(current.next() == null ? null : current.next().next());
-            LockingNode<E> prev = current.prev();
-            LockingNode<E> next = current.next() == null ? null : current.next().next();
-            if (prev == null) {
-                root.getLock().lock();
-                Lock rootLock = root.getLock();
-                root = next;
-                rootLock.unlock();
-            } else {
-                prev.setNext(next);
+        }
+
+        Node<E> prev = root, current = root.next();
+        prev.getLock().lock();
+        if (current != null) {
+            current.getLock().lock();
+        }
+
+        listLock.unlock();
+
+        while (current != null) {
+            if (comparator().compare(current.value(), elem) == 0) {
+                prev.setNext(current.next());
+                prev.getLock().unlock();
+                current.getLock().lock();
+                return true;
             }
-            unlock(prev);
-            unlock(next);
-            unlock(current);
-            return true;
-        }
-    }
 
-    private void lock(LockingNode<E> node) {
-        if (node != null) {
-            node.getLock().lock();
+            Node<E> oldPrev = prev;
+            prev = current;
+            current = current.next();
+            if (current != null) {
+                current.getLock().lock();
+            }
+            oldPrev.getLock().unlock();
         }
-    }
-
-    private void unlock(LockingNode<E> node) {
-        if (node != null) {
-            node.getLock().unlock();
-        }
+        prev.getLock().unlock();
+        return false;
     }
 
     @Override
     public Iterator<E> iterator() {
         return new Iterator<E>() {
-            private LockingNode<E> current = root;
+            private Node<E> current = root;
 
             @Override
             public boolean hasNext() {
@@ -119,5 +120,35 @@ public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements
                 return val;
             }
         };
+    }
+
+    private static class Node<E> {
+        private Lock lock;
+        private E value;
+        private Node<E> next;
+
+        Node(E elem) {
+            value = elem;
+        }
+
+        E value() {
+            return value;
+        }
+
+        Node<E> next() {
+            return next;
+        }
+
+        private void setNext(Node<E> next) {
+            this.next = next;
+        }
+
+        Lock getLock() {
+            if (lock == null) {
+                lock = new ReentrantLock();
+            }
+
+            return lock;
+        }
     }
 }

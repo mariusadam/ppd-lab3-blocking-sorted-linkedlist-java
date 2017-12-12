@@ -32,17 +32,25 @@ public class CoarseGrainedSyncedSortedLinkedList<E extends Comparable<E>> implem
     }
 
     private void doAdd(E elem) {
-        if (this.root == null) {
-            this.root = new Node<>(elem);
-        } else if (this.comparator().compare(elem, this.root.value()) < 0) {
-            this.root = new Node<>(null, elem, this.root);
+        if (root == null) {
+            root = new Node<>(elem);
+            return;
+        }
+        if (this.comparator().compare(elem, root.value()) < 0) {
+            Node<E> oldRoot = root;
+            root = new Node<>(elem);
+            root.setNext(oldRoot);
         } else {
-            Node<E> current = root;
-            while (current.next() != null && comparator().compare(elem, current.value()) > 0) {
+            Node<E> prev = root, current = root.next(), node = new Node<>(elem);
+            while (current != null) {
+                if (comparator().compare(current.value(), node.value()) >= 0) {
+                    prev.setNext(node);
+                    node.setNext(current);
+                    return;
+                }
+                prev = current;
                 current = current.next();
             }
-
-            current.setNext(new Node<>(current, elem, current.next()));
         }
     }
 
@@ -62,24 +70,21 @@ public class CoarseGrainedSyncedSortedLinkedList<E extends Comparable<E>> implem
     }
 
     private boolean doRemove(E elem) {
-        Node<E> current = root;
-        while (current != null && !current.value().equals(elem)) {
-            current = current.next();
+        if (root == null) {
+            return false;
         }
 
-        if (current == null) {
-            return false;
-        } else {
-            Node<E> prev = current.prev();
-            Node<E> next = current.next() == null ? null : current.next().next();
-            if (prev == null) {
-                root = next;
-            } else {
-                prev.setNext(next);
+        Node<E> prev = root, current = root.next();
+        while (current != null) {
+            if (comparator().compare(current.value(), elem) == 0) {
+                prev.setNext(current.next());
+                return true;
             }
 
-            return true;
+            prev = current;
+            current = current.next();
         }
+        return false;
     }
 
     @Override
@@ -106,5 +111,26 @@ public class CoarseGrainedSyncedSortedLinkedList<E extends Comparable<E>> implem
                 return val;
             }
         };
+    }
+
+    private static class Node<E> {
+        private E value;
+        private Node<E> next;
+
+        Node(E elem) {
+            value = elem;
+        }
+
+        E value() {
+            return value;
+        }
+
+        Node<E> next() {
+            return next;
+        }
+
+        void setNext(Node<E> next) {
+            this.next = next;
+        }
     }
 }
