@@ -88,32 +88,11 @@ public class CoarseGrainedSyncedSortedLinkedList<E extends Comparable<E>> implem
     }
 
     @Override
-    public Iterator<E> iterator() {
-        lock.lock();
-
-        return new Iterator<E>() {
-            private Node<E> current = root;
-
-            @Override
-            public boolean hasNext() {
-                boolean hasNext = current != null;
-                if (!hasNext) {
-                    lock.unlock();
-                }
-
-                return hasNext;
-            }
-
-            @Override
-            public E next() {
-                E val = current.value();
-                current = current.next();
-                return val;
-            }
-        };
+    public LockingIterator<E> iterator() {
+        return new LockingIterator<>(root, lock);
     }
 
-    private static class Node<E> {
+    private static class Node<E> implements NodeInterface<E>{
         private E value;
         private Node<E> next;
 
@@ -121,11 +100,11 @@ public class CoarseGrainedSyncedSortedLinkedList<E extends Comparable<E>> implem
             value = elem;
         }
 
-        E value() {
+        public E value() {
             return value;
         }
 
-        Node<E> next() {
+        public Node<E> next() {
             return next;
         }
 

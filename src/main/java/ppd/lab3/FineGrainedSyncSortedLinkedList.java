@@ -104,25 +104,11 @@ public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements
     }
 
     @Override
-    public Iterator<E> iterator() {
-        return new Iterator<E>() {
-            private Node<E> current = root;
-
-            @Override
-            public boolean hasNext() {
-                return current != null;
-            }
-
-            @Override
-            public E next() {
-                E val = current.value();
-                current = current.next();
-                return val;
-            }
-        };
+    public LockingIterator<E> iterator() {
+        return new LockingIterator<>(root, listLock);
     }
 
-    private static class Node<E> {
+    private static class Node<E> implements NodeInterface<E>{
         private Lock lock;
         private E value;
         private Node<E> next;
@@ -131,11 +117,11 @@ public class FineGrainedSyncSortedLinkedList<E extends Comparable<E>> implements
             value = elem;
         }
 
-        E value() {
+        public E value() {
             return value;
         }
 
-        Node<E> next() {
+        public Node<E> next() {
             return next;
         }
 
